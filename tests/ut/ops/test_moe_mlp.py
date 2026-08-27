@@ -13,6 +13,7 @@ from vllm.model_executor.layers.fused_moe.activation import MoEActivation
 
 from vllm_ascend.ascend_forward_context import MoECommType
 from vllm_ascend.device.device_op import DeviceOperator
+from vllm_ascend.ops.activation import AscendSwigluStepAndMul
 from vllm_ascend.ops.fused_moe.dataclass.fused_experts import MoEWeights
 from vllm_ascend.ops.fused_moe.dataclass.moe_mlp import MoEMlpComputeInput
 from vllm_ascend.ops.fused_moe.dataclass.moe_quant import MoEMxfpParams, MoEQuantParams
@@ -25,7 +26,6 @@ from vllm_ascend.ops.fused_moe.moe_mlp import (
 )
 from vllm_ascend.quantization.quant_type import QuantType
 from vllm_ascend.utils import AscendDeviceType
-from vllm_ascend.ops.activation import AscendSwigluStepAndMul
 
 MOE_MLP = "vllm_ascend.ops.fused_moe.moe_mlp"
 MXFP4_TEST_DTYPE = getattr(torch, "float4_e2m1fn_x2", torch.float16)
@@ -900,7 +900,6 @@ class TestQuantApplyMlpGeluPath(_GeluPathBase):
                 return_value=(requantized, requant_scale),
             ) as mock_dynamic_quant,
             patch.object(DeviceOperator, "npu_grouped_matmul_gmm2", return_value=torch.zeros(1, 2)),
-            patch(f"{MOE_MLP}.ensure_mxfp8_moe_available"),
             patch(f"{MOE_MLP}.dispose_tensor"),
         ):
             quant_apply_mlp(**kwargs)
@@ -1150,7 +1149,6 @@ class TestQuantApplyMlpNoGeluImpact(_GeluPathBase):
     """Non-GELU activations must NOT enter the GELU path (no regression)."""
 
     def _run_non_gelu(self, activation):
-        gate_up = torch.zeros(1, 16 if activation == MoEActivation.SWIGLUSTEP else 8)
         with (
             _mock_w8a8_gelu_compute(torch.zeros(1, 8)),
             patch(f"{MOE_MLP}._EXTRA_CTX") as mock_ctx,
